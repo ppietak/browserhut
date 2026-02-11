@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+GRPC_PORT       ?= 8554
+WEB_PORT        ?= 3000
 API             ?= 34
 IMAGE            ?= google_apis
 JDK_MAJOR             ?= 17
@@ -36,7 +38,7 @@ export PATH             := $(JAVA_HOME)/bin:$(SDK_DIR)/cmdline-tools/latest/bin:
 ifeq ($(HEADLESS),1)
   EMU_FLAGS := -no-window -no-audio -gpu swiftshader_indirect
 else
-  EMU_FLAGS := -gpu host
+  EMU_FLAGS := -no-window -no-audio -gpu host
 endif
 
 JDK_OK   := $(JDK_DIR)/.ok
@@ -89,14 +91,14 @@ $(AVD_OK): $(IMAGE_OK)
 	@touch "$@"
 
 # ── Public targets ─────────────────────────────────────────
-.PHONY: start stop clean clean-all
+.PHONY: start stop clean clean-all web-start web-stop
 
 start: $(AVD_OK)
 	@if "$(ADB)" devices 2>/dev/null | grep -q "emulator-"; then \
 		echo "⚠ Emulator already running"; exit 0; \
 	fi
 	@echo "▶ Starting emulator…"
-	@"$(EMULATOR)" -avd "$(AVD_NAME)" $(EMU_FLAGS) > "$(ROOT)/.emulator.log" 2>&1 &
+	@"$(EMULATOR)" -avd "$(AVD_NAME)" $(EMU_FLAGS) -grpc $(GRPC_PORT) > "$(ROOT)/.emulator.log" 2>&1 &
 	@"$(ADB)" wait-for-device
 	@echo "  Waiting for boot…"
 	@"$(ADB)" shell 'while [ "$$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done' 2>/dev/null
@@ -109,6 +111,17 @@ clean:
 	@rm -rf "$(AVD_DIR)" "$(SDK_DIR)"/.image-*.ok
 	@echo "✔ AVDs cleaned."
 
+web-start:
+	@cd "$(ROOT)/web" && npm install --silent
+	@echo "▶ Starting web server on port $(WEB_PORT)…"
+	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) node server.js > "$(ROOT)/.web.log" 2>&1 &
+	@sleep 1
+	@echo "✔ Web server running at http://localhost:$(WEB_PORT)"
+
+web-stop:
+	@-pkill -f "node server.js" 2>/dev/null || echo "(no web server running)"
+	@echo "✔ Web server stopped."
+
 clean-all:
-	@rm -rf "$(SDK_DIR)" "$(JDK_DIR)" "$(AVD_DIR)" "$(ROOT)/.emulator.log"
+	@rm -rf "$(SDK_DIR)" "$(JDK_DIR)" "$(AVD_DIR)" "$(ROOT)/.emulator.log" "$(ROOT)/.web.log"
 	@echo "✔ All cleaned."

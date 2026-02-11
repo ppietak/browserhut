@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Android Emulator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+  }
+  body {
+    background: #1a1a1a;
+    color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+  }
+  #status {
+    padding: 10px 16px;
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+  #status.connected { color: #5a8a5e; }
+  #status.error { color: #a05050; }
+  #container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    background: #222;
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+  canvas {
+    background: #000;
+    cursor: pointer;
+    max-height: 80vh;
+    touch-action: none;
+    display: block;
+  }
+  #nav {
+    display: flex;
+    gap: 2px;
+    background: #222;
+    border-radius: 0 0 12px 12px;
+    padding: 6px 8px 8px;
+  }
+  #nav button {
+    background: transparent;
+    color: #888;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 24px;
+    font-size: 0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #nav button svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    transition: fill 0.15s ease;
+  }
+  #nav button:hover {
+    background: rgba(255,255,255,0.06);
+    color: #bbb;
+  }
+  #nav button:active {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    transform: scale(0.92);
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <canvas id="screen"></canvas>
+  <div id="nav">
+    <button data-key="GoBack" title="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <button data-key="GoHome" title="Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    <button data-key="AppSwitch" title="Recents"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+  </div>
+</div>
+<div id="status">Connecting...</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('screen');
+  const ctx = canvas.getContext('2d');
+  const statusEl = document.getElementById('status');
+
+  let deviceWidth = 1080;
+  let deviceHeight = 2400;
+  let ws = null;
+  let frameCount = 0;
+  let fps = 0;
+  let reconnectDelay = 1000;
+
+  // ── Frame rendering via rAF ───────────────────────────────
+  // Only keep the latest frame; render in sync with display refresh.
+  // Reduces GC pressure: one pending Blob at a time instead of dozens.
+  let pendingFrame = null;
+  let decoding = false;
+  let rafId = 0;
+
+  function renderLoop() {
+    rafId = requestAnimationFrame(renderLoop);
+    if (!pendingFrame || decoding) return;
+    const buf = pendingFrame;
+    pendingFrame = null;
+    decoding = true;
+    const blob = new Blob([buf], { type: 'image/png' });
+    createImageBitmap(blob).then((bmp) => {
+      ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      bmp.close();
+      frameCount++;
+      decoding = false;
+    }).catch(() => { decoding = false; });
+  }
+  rafId = requestAnimationFrame(renderLoop);
+
+  // FPS counter
+  setInterval(() => {
+    fps = frameCount;
+    frameCount = 0;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      statusEl.textContent = 'Connected | ' + fps + ' FPS';
+    }
+  }, 1000);
+
+  function setCanvasSize() {
+    // Display at half device resolution, maintain aspect ratio
+    const ratio = deviceWidth / deviceHeight;
+    const maxH = window.innerHeight * 0.8;
+    const maxW = window.innerWidth * 0.9;
+    let h = maxH;
+    let w = h * ratio;
+    if (w > maxW) {
+      w = maxW;
+      h = w / ratio;
+    }
+    canvas.style.width = Math.round(w) + 'px';
+    canvas.style.height = Math.round(h) + 'px';
+    canvas.width = 540;
+    canvas.height = Math.round(540 / ratio);
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(proto + '//' + location.host);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      statusEl.textContent = 'Connected';
+      statusEl.className = 'connected';
+      reconnectDelay = 1000;
+    };
+
+    ws.onmessage = (evt) => {
+      if (typeof evt.data === 'string') {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'config') {
+          deviceWidth = msg.deviceWidth;
+          deviceHeight = msg.deviceHeight;
+          setCanvasSize();
+        }
+        return;
+      }
+
+      // Stash latest frame — renderLoop will pick it up on next rAF
+      pendingFrame = evt.data;
+    };
+
+    ws.onclose = () => {
+      statusEl.textContent = 'Disconnected — reconnecting...';
+      statusEl.className = 'error';
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  }
+
+  // ── Coordinate mapping ─────────────────────────────────
+
+  function mapCoords(e) {
+    const rect = canvas.getBoundingClientRect();
+    // CSS pixel position on canvas
+    const cssX = e.clientX - rect.left;
+    const cssY = e.clientY - rect.top;
+    // Map to device pixel space
+    const x = Math.round((cssX / rect.width) * deviceWidth);
+    const y = Math.round((cssY / rect.height) * deviceHeight);
+    return { x, y };
+  }
+
+  // ── Touch / Mouse input ────────────────────────────────
+
+  let mouseDown = false;
+
+  canvas.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    mouseDown = true;
+    const { x, y } = mapCoords(e);
+    send({ type: 'touch', x, y, pressure: 1024, id: 0 });
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!mouseDown) return;
+    e.preventDefault();
+    const { x, y } = mapCoords(e);
+    send({ type: 'touch', x, y, pressure: 1024, id: 0 });
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    e.preventDefault();
+    mouseDown = false;
+    const { x, y } = mapCoords(e);
+    send({ type: 'touch', x, y, pressure: 0, id: 0 });
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    if (mouseDown) {
+      mouseDown = false;
+      send({ type: 'touch', x: 0, y: 0, pressure: 0, id: 0 });
+    }
+  });
+
+  // ── Touch events (trackpad / touchscreen swipe) ───────
+
+  function mapTouch(t) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: Math.round(((t.clientX - rect.left) / rect.width) * deviceWidth),
+      y: Math.round(((t.clientY - rect.top) / rect.height) * deviceHeight),
+    };
+  }
+
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const { x, y } = mapTouch(t);
+      send({ type: 'touch', x, y, pressure: 1024, id: t.identifier });
+    }
+  });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const { x, y } = mapTouch(t);
+      send({ type: 'touch', x, y, pressure: 1024, id: t.identifier });
+    }
+  });
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const { x, y } = mapTouch(t);
+      send({ type: 'touch', x, y, pressure: 0, id: t.identifier });
+    }
+  });
+
+  canvas.addEventListener('touchcancel', (e) => {
+    for (const t of e.changedTouches) {
+      send({ type: 'touch', x: 0, y: 0, pressure: 0, id: t.identifier });
+    }
+  });
+
+  // Prevent context menu on canvas
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ── Keyboard input ─────────────────────────────────────
+
+  // Mac Cmd+key shortcuts to forward as Android Ctrl+key
+  const FORWARD_CMD = new Set(['a','c','v','x','z']);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+
+    // Mac Cmd → Android Ctrl for common shortcuts
+    if ((e.metaKey || e.ctrlKey) && FORWARD_CMD.has(e.key.toLowerCase())) {
+      e.preventDefault();
+      // Cmd+V: read Mac clipboard, push to Android, then Ctrl+V
+      if (e.key.toLowerCase() === 'v') {
+        navigator.clipboard.readText().then((text) => {
+          if (text) send({ type: 'paste', text });
+          else send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false });
+        }).catch(() => {
+          // Clipboard API denied — fall back to plain Ctrl+V
+          send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false });
+        });
+        return;
+      }
+      send({
+        type: 'key', eventType: 'keydown', key: e.key,
+        ctrl: true, shift: e.shiftKey,
+      });
+      return;
+    }
+
+    // Let browser handle other Cmd/Ctrl combos (reload, new tab, etc.)
+    if (e.metaKey || e.ctrlKey) return;
+
+    e.preventDefault();
+    send({ type: 'key', eventType: 'keydown', key: e.key });
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.metaKey || e.ctrlKey) return;
+    e.preventDefault();
+    send({ type: 'key', eventType: 'keyup', key: e.key });
+  });
+
+  // ── Nav buttons ────────────────────────────────────────
+
+  document.querySelectorAll('#nav button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-key');
+      send({ type: 'key', eventType: 'keypress', key });
+    });
+  });
+
+  // ── Send helper ────────────────────────────────────────
+
+  function send(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  // ── Init ───────────────────────────────────────────────
+
+  setCanvasSize();
+  window.addEventListener('resize', setCanvasSize);
+  connect();
+})();
+</script>
+</body>
+</html>

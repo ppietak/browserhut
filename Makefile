@@ -103,8 +103,10 @@ start: $(AVD_OK)
 	@echo "  Waiting for boot…"
 	@"$(ADB)" shell 'while [ "$$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done' 2>/dev/null
 	@echo "✔ Emulator ready."
+	@$(MAKE) web-start
 
 stop:
+	@$(MAKE) web-stop
 	@"$(ADB)" emu kill 2>/dev/null || echo "(no emulator running)"
 
 clean:

@@ -180,7 +180,14 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    if (msg.type === 'paste') {
+    if (msg.type === 'reset-chrome') {
+      adbCmd("pm clear com.android.chrome");
+      setTimeout(() => {
+        adbCmd("am start -a android.intent.action.VIEW -d about:blank -n com.android.chrome/com.google.android.apps.chrome.Main");
+        setTimeout(() => adbCmd("input keyevent 4"), 3000);
+      }, 500);
+      return;
+    } else if (msg.type === 'paste') {
       // Push Mac clipboard to Android, then Ctrl+V
       inputClient.setClipboard({ text: msg.text }, (err) => {
         if (err) console.error('setClipboard error:', err.message);

@@ -91,7 +91,7 @@ $(AVD_OK): $(IMAGE_OK)
 	@touch "$@"
 
 # ── Public targets ─────────────────────────────────────────
-.PHONY: start stop clean clean-all web-start web-stop
+.PHONY: start stop clean clean-all web-start web-stop setup-chrome
 
 start: $(AVD_OK)
 	@if "$(ADB)" devices 2>/dev/null | grep -q "emulator-"; then \
@@ -103,7 +103,9 @@ start: $(AVD_OK)
 	@echo "  Waiting for boot…"
 	@"$(ADB)" shell 'while [ "$$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done' 2>/dev/null
 	@echo "✔ Emulator ready."
+	@$(MAKE) setup-chrome
 	@$(MAKE) web-start
+	@open "http://localhost:$(WEB_PORT)"
 
 stop:
 	@$(MAKE) web-stop
@@ -123,6 +125,15 @@ web-start:
 web-stop:
 	@-pkill -f "node server.js" 2>/dev/null || echo "(no web server running)"
 	@echo "✔ Web server stopped."
+
+setup-chrome:
+	@echo "▶ Setting up Chrome…"
+	@"$(ADB)" shell "echo 'chrome --disable-fre --no-default-browser-check --no-first-run --disable-notifications' > /data/local/tmp/chrome-command-line" 2>/dev/null
+	@"$(ADB)" shell pm clear com.android.chrome > /dev/null 2>&1 || true
+	@"$(ADB)" shell am start -a android.intent.action.VIEW -d "about:blank" -n com.android.chrome/com.google.android.apps.chrome.Main > /dev/null 2>&1
+	@sleep 3
+	@"$(ADB)" shell input keyevent 4
+	@echo "✔ Chrome launched."
 
 clean-all:
 	@rm -rf "$(SDK_DIR)" "$(JDK_DIR)" "$(AVD_DIR)" "$(ROOT)/.emulator.log" "$(ROOT)/.web.log"

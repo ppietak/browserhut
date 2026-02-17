@@ -91,9 +91,25 @@ $(AVD_OK): $(IMAGE_OK)
 	@touch "$@"
 
 # ── Public targets ─────────────────────────────────────────
-.PHONY: start stop clean clean-all web-start web-stop setup-chrome
+.PHONY: start stop open clean clean-all setup-chrome launch-emulator
 
-start: $(AVD_OK)
+start:
+	@cd "$(ROOT)/web" && npm install --silent
+	@echo "▶ Starting backend server on port $(WEB_PORT)…"
+	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) node server.js > "$(ROOT)/.web.log" 2>&1 &
+	@sleep 1
+	@echo "✔ Backend running at http://localhost:$(WEB_PORT)"
+	@open "$(ROOT)/web/public/index.html"
+
+stop:
+	@-pkill -f "node server.js" 2>/dev/null || echo "(no backend running)"
+	@"$(ADB)" emu kill 2>/dev/null || echo "(no emulator running)"
+	@echo "✔ Stopped."
+
+open:
+	@open "$(ROOT)/web/public/index.html"
+
+launch-emulator: $(AVD_OK)
 	@if "$(ADB)" devices 2>/dev/null | grep -q "emulator-"; then \
 		echo "⚠ Emulator already running"; exit 0; \
 	fi
@@ -104,27 +120,6 @@ start: $(AVD_OK)
 	@"$(ADB)" shell 'while [ "$$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done' 2>/dev/null
 	@echo "✔ Emulator ready."
 	@$(MAKE) setup-chrome
-	@$(MAKE) web-start
-	@open "http://localhost:$(WEB_PORT)"
-
-stop:
-	@$(MAKE) web-stop
-	@"$(ADB)" emu kill 2>/dev/null || echo "(no emulator running)"
-
-clean:
-	@rm -rf "$(AVD_DIR)" "$(SDK_DIR)"/.image-*.ok
-	@echo "✔ AVDs cleaned."
-
-web-start:
-	@cd "$(ROOT)/web" && npm install --silent
-	@echo "▶ Starting web server on port $(WEB_PORT)…"
-	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) node server.js > "$(ROOT)/.web.log" 2>&1 &
-	@sleep 1
-	@echo "✔ Web server running at http://localhost:$(WEB_PORT)"
-
-web-stop:
-	@-pkill -f "node server.js" 2>/dev/null || echo "(no web server running)"
-	@echo "✔ Web server stopped."
 
 setup-chrome:
 	@echo "▶ Setting up Chrome…"
@@ -134,6 +129,10 @@ setup-chrome:
 	@sleep 3
 	@"$(ADB)" shell input keyevent 4
 	@echo "✔ Chrome launched."
+
+clean:
+	@rm -rf "$(AVD_DIR)" "$(SDK_DIR)"/.image-*.ok
+	@echo "✔ AVDs cleaned."
 
 clean-all:
 	@rm -rf "$(SDK_DIR)" "$(JDK_DIR)" "$(AVD_DIR)" "$(ROOT)/.emulator.log" "$(ROOT)/.web.log"

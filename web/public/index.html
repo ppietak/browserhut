@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Android Emulator</title>
+<title>Device Dashboard</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -21,15 +21,91 @@
     justify-content: center;
     user-select: none;
   }
-  #status {
+
+  /* ── Launcher view ────────────────────────────── */
+  #launcher {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+  }
+  #launcher h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #ccc;
+    letter-spacing: -0.3px;
+  }
+  .card {
+    background: #242424;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 28px 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    min-width: 260px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: #bbb;
+  }
+  .card-status {
+    font-size: 12px;
+    color: #666;
+    letter-spacing: 0.3px;
+  }
+  .card-status.running { color: #5a8a5e; }
+  .card-status.starting { color: #a08a40; }
+  .card-status.error { color: #a05050; }
+  .btn {
+    background: #2a6a2e;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 28px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { background: #348a38; }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .btn-stop {
+    background: #6a2a2a;
+  }
+  .btn-stop:hover { background: #8a3434; }
+  #backend-status {
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 0.5px;
+  }
+  #backend-status.connected { color: #5a8a5e; }
+
+  /* ── Emulator view ────────────────────────────── */
+  #emulator-view {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+  #emu-status {
     padding: 10px 16px;
     font-size: 11px;
     color: #555;
     letter-spacing: 0.5px;
     font-weight: 500;
   }
-  #status.connected { color: #5a8a5e; }
-  #status.error { color: #a05050; }
+  #emu-status.connected { color: #5a8a5e; }
+  #emu-status.error { color: #a05050; }
   #container {
     display: flex;
     flex-direction: row;
@@ -83,34 +159,183 @@
 </style>
 </head>
 <body>
-<div id="container">
-  <canvas id="screen"></canvas>
-  <div id="nav">
-    <button data-key="AppSwitch" title="Recents"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
-    <button data-key="GoHome" title="Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
-    <button data-key="GoBack" title="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
-    <span style="flex:1"></span>
-    <button id="reset-chrome" title="Reset Chrome"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+
+<!-- Launcher view -->
+<div id="launcher">
+  <h1>Device Dashboard</h1>
+  <div class="card">
+    <div class="card-title">Android Emulator</div>
+    <div id="emu-card-status" class="card-status">Connecting to backend...</div>
+    <button id="start-btn" class="btn" disabled>Start</button>
   </div>
+  <div id="backend-status">Connecting...</div>
 </div>
-<div id="status">Connecting...</div>
+
+<!-- Emulator view -->
+<div id="emulator-view">
+  <div id="container">
+    <canvas id="screen"></canvas>
+    <div id="nav">
+      <button data-key="AppSwitch" title="Recents"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button data-key="GoHome" title="Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+      <button data-key="GoBack" title="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+      <span style="flex:1"></span>
+      <button id="stop-btn" title="Stop Emulator"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg></button>
+      <button id="reset-chrome" title="Reset Chrome"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+    </div>
+  </div>
+  <div id="emu-status">Streaming...</div>
+</div>
 
 <script>
 (function() {
+  const BACKEND = (location.protocol === 'file:' || location.hostname === '')
+    ? 'localhost:3000'
+    : location.host;
+  const API_BASE = 'http://' + BACKEND;
+  const WS_URL = 'ws://' + BACKEND;
+
+  // DOM
+  const launcherEl = document.getElementById('launcher');
+  const emuViewEl = document.getElementById('emulator-view');
+  const startBtn = document.getElementById('start-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  const backendStatusEl = document.getElementById('backend-status');
+  const emuCardStatus = document.getElementById('emu-card-status');
+  const emuStatusEl = document.getElementById('emu-status');
   const canvas = document.getElementById('screen');
   const ctx = canvas.getContext('2d');
-  const statusEl = document.getElementById('status');
 
   let deviceWidth = 1080;
   let deviceHeight = 2400;
   let ws = null;
   let frameCount = 0;
   let fps = 0;
-  let reconnectDelay = 1000;
+  let backendConnected = false;
+  let emulatorState = 'stopped';
+  let statusPollTimer = null;
 
-  // ── Frame rendering via rAF ───────────────────────────────
-  // Only keep the latest frame; render in sync with display refresh.
-  // Reduces GC pressure: one pending Blob at a time instead of dozens.
+  // ── View switching ──────────────────────────────────────
+
+  function showLauncher() {
+    launcherEl.style.display = 'flex';
+    emuViewEl.style.display = 'none';
+    updateLauncherUI();
+  }
+
+  function showEmulatorView() {
+    launcherEl.style.display = 'none';
+    emuViewEl.style.display = 'flex';
+  }
+
+  function updateLauncherUI() {
+    if (!backendConnected) {
+      emuCardStatus.textContent = 'Backend not connected';
+      emuCardStatus.className = 'card-status error';
+      startBtn.disabled = true;
+      backendStatusEl.textContent = 'Disconnected';
+      backendStatusEl.className = '';
+      return;
+    }
+
+    backendStatusEl.textContent = 'Backend connected';
+    backendStatusEl.className = 'connected';
+
+    if (emulatorState === 'stopped') {
+      emuCardStatus.textContent = 'Stopped';
+      emuCardStatus.className = 'card-status';
+      startBtn.textContent = 'Start';
+      startBtn.className = 'btn';
+      startBtn.disabled = false;
+    } else if (emulatorState === 'starting') {
+      emuCardStatus.textContent = 'Starting...';
+      emuCardStatus.className = 'card-status starting';
+      startBtn.textContent = 'Starting...';
+      startBtn.disabled = true;
+    } else if (emulatorState === 'running') {
+      emuCardStatus.textContent = 'Running';
+      emuCardStatus.className = 'card-status running';
+      startBtn.textContent = 'Connect';
+      startBtn.className = 'btn';
+      startBtn.disabled = false;
+    }
+  }
+
+  // ── Status polling (REST) ───────────────────────────────
+
+  function startPolling() {
+    if (statusPollTimer) return;
+    pollStatus();
+    statusPollTimer = setInterval(pollStatus, 2000);
+  }
+
+  function stopPolling() {
+    if (statusPollTimer) {
+      clearInterval(statusPollTimer);
+      statusPollTimer = null;
+    }
+  }
+
+  function pollStatus() {
+    fetch(API_BASE + '/api/status')
+      .then((r) => r.json())
+      .then((data) => {
+        backendConnected = true;
+        setEmulatorState(data.emulator);
+      })
+      .catch(() => {
+        backendConnected = false;
+        updateLauncherUI();
+      });
+  }
+
+  function setEmulatorState(state) {
+    emulatorState = state;
+    if (emuViewEl.style.display !== 'none' && state === 'stopped') {
+      // Emulator stopped while viewing — return to launcher
+      if (ws) { ws.close(); ws = null; }
+      showLauncher();
+    }
+    updateLauncherUI();
+  }
+
+  // ── Start / Stop buttons ────────────────────────────────
+
+  startBtn.addEventListener('click', () => {
+    if (emulatorState === 'running') {
+      // Already running — switch to emulator view and connect WS
+      showEmulatorView();
+      connectWs();
+      stopPolling();
+      return;
+    }
+    if (emulatorState !== 'stopped') return;
+
+    startBtn.disabled = true;
+    fetch(API_BASE + '/api/emulator/start', { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        setEmulatorState(data.emulator || 'starting');
+      })
+      .catch((err) => {
+        console.error('Start failed:', err);
+        startBtn.disabled = false;
+      });
+  });
+
+  stopBtn.addEventListener('click', () => {
+    fetch(API_BASE + '/api/emulator/stop', { method: 'POST' })
+      .then((r) => r.json())
+      .then(() => {
+        if (ws) { ws.close(); ws = null; }
+        emulatorState = 'stopped';
+        showLauncher();
+        startPolling();
+      })
+      .catch((err) => console.error('Stop failed:', err));
+  });
+
+  // ── Frame rendering via rAF ─────────────────────────────
   let pendingFrame = null;
   let decoding = false;
   let rafId = 0;
@@ -135,13 +360,12 @@
   setInterval(() => {
     fps = frameCount;
     frameCount = 0;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      statusEl.textContent = 'Connected | ' + fps + ' FPS';
+    if (ws && ws.readyState === WebSocket.OPEN && emuViewEl.style.display !== 'none') {
+      emuStatusEl.textContent = 'Connected | ' + fps + ' FPS';
     }
   }, 1000);
 
   function setCanvasSize() {
-    // Display at half device resolution, maintain aspect ratio
     const ratio = deviceWidth / deviceHeight;
     const maxH = window.innerHeight * 0.8;
     const maxW = window.innerWidth * 0.9;
@@ -157,15 +381,19 @@
     canvas.height = Math.round(540 / ratio);
   }
 
-  function connect() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(proto + '//' + location.host);
+  // ── WebSocket connection ────────────────────────────────
+
+  let wsReconnectDelay = 1000;
+
+  function connectWs() {
+    if (ws && ws.readyState <= 1) return; // already open or connecting
+    ws = new WebSocket(WS_URL);
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
-      statusEl.textContent = 'Connected';
-      statusEl.className = 'connected';
-      reconnectDelay = 1000;
+      emuStatusEl.textContent = 'Connected';
+      emuStatusEl.className = 'connected';
+      wsReconnectDelay = 1000;
     };
 
     ws.onmessage = (evt) => {
@@ -175,19 +403,37 @@
           deviceWidth = msg.deviceWidth;
           deviceHeight = msg.deviceHeight;
           setCanvasSize();
+        } else if (msg.type === 'status') {
+          if (msg.emulator === 'running' && emuViewEl.style.display === 'none') {
+            // Just transitioned to running — switch view
+            showEmulatorView();
+            stopPolling();
+          } else if (msg.emulator === 'stopped') {
+            setEmulatorState('stopped');
+          } else {
+            emulatorState = msg.emulator;
+            updateLauncherUI();
+          }
         }
         return;
       }
 
-      // Stash latest frame — renderLoop will pick it up on next rAF
+      // Binary frame
       pendingFrame = evt.data;
     };
 
     ws.onclose = () => {
-      statusEl.textContent = 'Disconnected — reconnecting...';
-      statusEl.className = 'error';
-      setTimeout(connect, reconnectDelay);
-      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+      emuStatusEl.textContent = 'Disconnected';
+      emuStatusEl.className = 'error';
+      // If we're in the emulator view, try to reconnect
+      if (emuViewEl.style.display !== 'none' && emulatorState === 'running') {
+        setTimeout(connectWs, wsReconnectDelay);
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, 10000);
+      } else {
+        // Return to launcher, start polling
+        showLauncher();
+        startPolling();
+      }
     };
 
     ws.onerror = () => {
@@ -195,20 +441,18 @@
     };
   }
 
-  // ── Coordinate mapping ─────────────────────────────────
+  // ── Coordinate mapping ──────────────────────────────────
 
   function mapCoords(e) {
     const rect = canvas.getBoundingClientRect();
-    // CSS pixel position on canvas
     const cssX = e.clientX - rect.left;
     const cssY = e.clientY - rect.top;
-    // Map to device pixel space
     const x = Math.round((cssX / rect.width) * deviceWidth);
     const y = Math.round((cssY / rect.height) * deviceHeight);
     return { x, y };
   }
 
-  // ── Touch / Mouse input ────────────────────────────────
+  // ── Touch / Mouse input ─────────────────────────────────
 
   let mouseDown = false;
 
@@ -240,7 +484,7 @@
     }
   });
 
-  // ── Touch events (trackpad / touchscreen swipe) ───────
+  // ── Touch events (trackpad / touchscreen swipe) ─────────
 
   function mapTouch(t) {
     const rect = canvas.getBoundingClientRect();
@@ -280,27 +524,23 @@
     }
   });
 
-  // Prevent context menu on canvas
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // ── Keyboard input ─────────────────────────────────────
+  // ── Keyboard input ──────────────────────────────────────
 
-  // Mac Cmd+key shortcuts to forward as Android Ctrl+key
   const FORWARD_CMD = new Set(['a','c','v','x','z']);
 
   document.addEventListener('keydown', (e) => {
+    if (emuViewEl.style.display === 'none') return; // Only in emulator view
     if (e.repeat) return;
 
-    // Mac Cmd → Android Ctrl for common shortcuts
     if ((e.metaKey || e.ctrlKey) && FORWARD_CMD.has(e.key.toLowerCase())) {
       e.preventDefault();
-      // Cmd+V: read Mac clipboard, push to Android, then Ctrl+V
       if (e.key.toLowerCase() === 'v') {
         navigator.clipboard.readText().then((text) => {
           if (text) send({ type: 'paste', text });
           else send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false });
         }).catch(() => {
-          // Clipboard API denied — fall back to plain Ctrl+V
           send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false });
         });
         return;
@@ -312,20 +552,19 @@
       return;
     }
 
-    // Let browser handle other Cmd/Ctrl combos (reload, new tab, etc.)
     if (e.metaKey || e.ctrlKey) return;
-
     e.preventDefault();
     send({ type: 'key', eventType: 'keydown', key: e.key });
   });
 
   document.addEventListener('keyup', (e) => {
+    if (emuViewEl.style.display === 'none') return;
     if (e.metaKey || e.ctrlKey) return;
     e.preventDefault();
     send({ type: 'key', eventType: 'keyup', key: e.key });
   });
 
-  // ── Nav buttons ────────────────────────────────────────
+  // ── Nav buttons ─────────────────────────────────────────
 
   document.querySelectorAll('#nav button[data-key]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -338,7 +577,7 @@
     send({ type: 'reset-chrome' });
   });
 
-  // ── Send helper ────────────────────────────────────────
+  // ── Send helper ─────────────────────────────────────────
 
   function send(msg) {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -346,11 +585,17 @@
     }
   }
 
-  // ── Init ───────────────────────────────────────────────
+  // ── Init ────────────────────────────────────────────────
 
   setCanvasSize();
   window.addEventListener('resize', setCanvasSize);
-  connect();
+
+  // Start with launcher view, poll backend status
+  showLauncher();
+  startPolling();
+
+  // Also connect WS immediately — it gives us push updates
+  connectWs();
 })();
 </script>
 </body>

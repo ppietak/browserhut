@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { WebSocketServer } = require('ws');
@@ -11,6 +11,7 @@ const GRPC_PORT = process.env.GRPC_PORT || 8554;
 const WEB_PORT = process.env.WEB_PORT || 3000;
 const PROTO_PATH = path.join(__dirname, '..', '.android-sdk', 'emulator', 'lib', 'emulator_controller.proto');
 const ADB_PATH = path.join(__dirname, '..', '.android-sdk', 'platform-tools', 'adb');
+const ROOT_DIR = path.join(__dirname, '..');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const MIME_TYPES = {
@@ -20,6 +21,11 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
 };
+
+// ── Emulator state ────────────────────────────────────────
+
+let emulatorState = 'stopped'; // stopped | starting | running
+let emulatorProcess = null;
 
 // ── ADB input (sendKey via gRPC is broken in emulator v36) ───
 
@@ -92,7 +98,7 @@ function handleKey(eventType, key, ctrl, shift) {
   }
 }
 
-// ── gRPC client setup ──────────────────────────────────────
+// ── gRPC client setup (deferred) ─────────────────────────
 
 const packageDef = protoLoader.loadSync(PROTO_PATH, {
   keepCase: true,
@@ -103,10 +109,15 @@ const packageDef = protoLoader.loadSync(PROTO_PATH, {
 });
 const proto = grpc.loadPackageDefinition(packageDef);
 const EmulatorController = proto.android.emulation.control.EmulatorController;
-// Separate connections: stream client for screenshots, input client for touch/mouse/clipboard.
-// Prevents high-bandwidth screenshot stream from blocking low-latency input RPCs.
-let streamClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
-let inputClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
+
+let streamClient = null;
+let inputClient = null;
+
+function connectGrpc() {
+  console.log('Connecting gRPC clients...');
+  streamClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
+  inputClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
+}
 
 // ── Device dimensions ──────────────────────────────────────
 
@@ -134,9 +145,138 @@ function discoverDimensions() {
   });
 }
 
-// ── Static file server ─────────────────────────────────────
+// ── Emulator lifecycle ─────────────────────────────────────
+
+function startEmulator() {
+  if (emulatorState !== 'stopped') return;
+  emulatorState = 'starting';
+  broadcastStatus();
+
+  // Run make targets for AVD setup + emulator launch + boot wait + chrome setup
+  const makeProc = spawn('make', ['-C', ROOT_DIR, 'launch-emulator'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let output = '';
+  makeProc.stdout.on('data', (d) => {
+    output += d.toString();
+    process.stdout.write(d);
+  });
+  makeProc.stderr.on('data', (d) => {
+    output += d.toString();
+    process.stderr.write(d);
+  });
+
+  makeProc.on('exit', async (code) => {
+    if (code !== 0) {
+      console.error('Emulator launch failed with code', code);
+      emulatorState = 'stopped';
+      broadcastStatus();
+      return;
+    }
+
+    // gRPC connect + discover dimensions
+    connectGrpc();
+    await discoverDimensions();
+    ensureAdbShell();
+
+    emulatorState = 'running';
+    broadcastStatus();
+
+    // Start streaming for all connected WS clients
+    wss.clients.forEach((ws) => {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'config', deviceWidth, deviceHeight }));
+        startStreamForClient(ws);
+      }
+    });
+  });
+}
+
+function stopEmulator() {
+  if (emulatorState === 'stopped') return;
+
+  // Cancel all streams
+  wss.clients.forEach((ws) => {
+    if (ws._emuStream) {
+      ws._emuStream.cancel();
+      ws._emuStream = null;
+    }
+  });
+
+  // Kill adb shell
+  if (adbShell && !adbShell.killed) {
+    adbShell.kill();
+    adbShell = null;
+  }
+
+  // Close gRPC clients
+  streamClient = null;
+  inputClient = null;
+
+  // Kill emulator via adb
+  execFile(ADB_PATH, ['emu', 'kill'], (err) => {
+    if (err) console.error('adb emu kill error:', err.message);
+  });
+
+  emulatorState = 'stopped';
+  broadcastStatus();
+}
+
+function broadcastStatus() {
+  const msg = JSON.stringify({ type: 'status', emulator: emulatorState });
+  wss.clients.forEach((ws) => {
+    if (ws.readyState === 1) ws.send(msg);
+  });
+}
+
+// ── Static file server + REST API ──────────────────────────
+
+function sendJson(res, status, obj) {
+  const body = JSON.stringify(obj);
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  });
+  res.end(body);
+}
 
 const httpServer = http.createServer((req, res) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    res.end();
+    return;
+  }
+
+  // REST API
+  if (req.url === '/api/status' && req.method === 'GET') {
+    return sendJson(res, 200, { emulator: emulatorState });
+  }
+
+  if (req.url === '/api/emulator/start' && req.method === 'POST') {
+    if (emulatorState !== 'stopped') {
+      return sendJson(res, 409, { error: 'Emulator is ' + emulatorState, emulator: emulatorState });
+    }
+    startEmulator();
+    return sendJson(res, 200, { emulator: 'starting' });
+  }
+
+  if (req.url === '/api/emulator/stop' && req.method === 'POST') {
+    if (emulatorState === 'stopped') {
+      return sendJson(res, 200, { emulator: 'stopped' });
+    }
+    stopEmulator();
+    return sendJson(res, 200, { emulator: 'stopped' });
+  }
+
+  // Static files
   let filePath = path.join(PUBLIC_DIR, req.url === '/' ? 'index.html' : req.url);
   filePath = path.normalize(filePath);
   if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -152,7 +292,10 @@ const httpServer = http.createServer((req, res) => {
       res.end('Not Found');
       return;
     }
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+      'Access-Control-Allow-Origin': '*',
+    });
     res.end(data);
   });
 });
@@ -164,11 +307,14 @@ const wss = new WebSocketServer({ server: httpServer });
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
 
-  // Send config
-  ws.send(JSON.stringify({ type: 'config', deviceWidth, deviceHeight }));
+  // Send current status
+  ws.send(JSON.stringify({ type: 'status', emulator: emulatorState }));
 
-  // Start screenshot stream
-  startStreamForClient(ws);
+  // If emulator is running, send config and start streaming
+  if (emulatorState === 'running' && streamClient) {
+    ws.send(JSON.stringify({ type: 'config', deviceWidth, deviceHeight }));
+    startStreamForClient(ws);
+  }
 
   // Input handler
   ws.on('message', (data, isBinary) => {
@@ -180,6 +326,9 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    // Only process input when emulator is running
+    if (emulatorState !== 'running' && msg.type !== 'reset-chrome') return;
+
     if (msg.type === 'reset-chrome') {
       adbCmd("pm clear com.android.chrome");
       setTimeout(() => {
@@ -189,6 +338,7 @@ wss.on('connection', (ws) => {
       return;
     } else if (msg.type === 'paste') {
       // Push Mac clipboard to Android, then Ctrl+V
+      if (!inputClient) return;
       inputClient.setClipboard({ text: msg.text }, (err) => {
         if (err) console.error('setClipboard error:', err.message);
         else adbCmd('input keycombination 113 50'); // Ctrl+V
@@ -196,6 +346,7 @@ wss.on('connection', (ws) => {
     } else if (msg.type === 'key') {
       handleKey(msg.eventType, msg.key, msg.ctrl, msg.shift);
     } else if (msg.type === 'touch') {
+      if (!inputClient) return;
       inputClient.sendTouch({
         touches: [{
           x: msg.x,
@@ -207,6 +358,7 @@ wss.on('connection', (ws) => {
         if (err) console.error('sendTouch error:', err.message);
       });
     } else if (msg.type === 'mouse') {
+      if (!inputClient) return;
       inputClient.sendMouse({
         x: msg.x,
         y: msg.y,
@@ -230,13 +382,14 @@ let reconnectDelay = 1000;
 
 function scheduleStreamReconnect(ws) {
   if (ws.readyState !== 1) return;
+  if (emulatorState !== 'running') return;
   if (reconnectTimer) return;
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
+    if (emulatorState !== 'running') return;
     console.log('Reconnecting gRPC clients...');
-    streamClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
-    inputClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
+    connectGrpc();
 
     // Restart streams for all connected clients
     wss.clients.forEach((connectedWs) => {
@@ -255,6 +408,7 @@ function scheduleStreamReconnect(ws) {
 }
 
 function startStreamForClient(ws) {
+  if (!streamClient) return;
   let lastSendTime = 0;
   const MIN_FRAME_INTERVAL = 16; // ~60 FPS cap
   const stream = streamClient.streamScreenshot({ format: 'PNG', width: streamWidth });
@@ -282,14 +436,32 @@ function startStreamForClient(ws) {
   ws._emuStream = stream;
 }
 
+// ── Check if emulator is already running ───────────────────
+
+function checkEmulatorRunning() {
+  return new Promise((resolve) => {
+    execFile(ADB_PATH, ['devices'], (err, stdout) => {
+      if (err) return resolve(false);
+      resolve(/emulator-/.test(stdout));
+    });
+  });
+}
+
 // ── Start ──────────────────────────────────────────────────
 
 async function main() {
-  await discoverDimensions();
-  ensureAdbShell(); // pre-warm persistent shell
+  // Check if emulator is already running (e.g. from previous session)
+  if (await checkEmulatorRunning()) {
+    console.log('Emulator already running, connecting...');
+    connectGrpc();
+    await discoverDimensions();
+    ensureAdbShell();
+    emulatorState = 'running';
+  }
+
   httpServer.listen(WEB_PORT, () => {
-    console.log(`Web server listening on http://localhost:${WEB_PORT}`);
-    console.log(`gRPC target: localhost:${GRPC_PORT}`);
+    console.log(`Backend server listening on http://localhost:${WEB_PORT}`);
+    console.log(`Emulator state: ${emulatorState}`);
   });
 }
 

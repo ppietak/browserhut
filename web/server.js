@@ -5,7 +5,7 @@ const { spawn, execFile } = require('child_process');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const { WebSocketServer } = require('ws');
-const sharp = require('sharp');
+
 
 const GRPC_PORT = process.env.GRPC_PORT || 8554;
 const WEB_PORT = process.env.WEB_PORT || 3000;
@@ -654,12 +654,23 @@ function handleScroll(ws, x, y, dx, dy) {
 
 // ── Pinch-zoom via gRPC multi-touch ─────────────────────
 
+function releasePinch(ws) {
+  const ps = ws._pinchState;
+  if (!ps) return;
+  inputClient.sendTouch({
+    touches: [
+      { x: ps.cx, y: ps.cy - ps.spread, pressure: 0, identifier: 1 },
+      { x: ps.cx, y: ps.cy + ps.spread, pressure: 0, identifier: 2 },
+    ],
+  }, (err) => { if (err) console.error('pinch release error:', err.message); });
+  ws._pinchState = null;
+}
+
 function handlePinch(ws, cx, cy, delta) {
   if (!ws._pinchState) {
     const spread = 200;
-    ws._pinchState = { cx, cy, spread, started: false, queue: [] };
+    ws._pinchState = { cx, cy, spread, started: false, pending: true, queue: [] };
 
-    // Touch down finger A, then B with small delay
     const s = ws._pinchState;
     inputClient.sendTouch({
       touches: [
@@ -678,20 +689,22 @@ function handlePinch(ws, cx, cy, delta) {
         // Flush queued moves
         for (const move of s.queue) move();
         s.queue = [];
+        // If release was requested while we were setting up, do it now
+        if (s.pending) releasePinch(ws);
       });
     });
   }
 
   const step = delta > 0 ? 40 : -40;
   ws._pinchState.spread = Math.max(40, ws._pinchState.spread + step);
+  ws._pinchState.pending = false;
 
+  const ps = ws._pinchState;
   const doMove = () => {
-    const s = ws._pinchState;
-    if (!s) return;
     inputClient.sendTouch({
       touches: [
-        { x: s.cx, y: s.cy - s.spread, pressure: 1024, identifier: 1 },
-        { x: s.cx, y: s.cy + s.spread, pressure: 1024, identifier: 2 },
+        { x: ps.cx, y: ps.cy - ps.spread, pressure: 1024, identifier: 1 },
+        { x: ps.cx, y: ps.cy + ps.spread, pressure: 1024, identifier: 2 },
       ],
     }, (err) => { if (err) console.error('pinch move error:', err.message); });
   };
@@ -704,15 +717,13 @@ function handlePinch(ws, cx, cy, delta) {
 
   clearTimeout(ws._pinchTimeout);
   ws._pinchTimeout = setTimeout(() => {
-    const ps = ws._pinchState;
-    if (!ps) return;
-    inputClient.sendTouch({
-      touches: [
-        { x: ps.cx, y: ps.cy - ps.spread, pressure: 0, identifier: 1 },
-        { x: ps.cx, y: ps.cy + ps.spread, pressure: 0, identifier: 2 },
-      ],
-    }, (err) => { if (err) console.error('pinch release error:', err.message); });
-    ws._pinchState = null;
+    if (!ws._pinchState) return;
+    if (!ws._pinchState.started) {
+      // Setup not done yet — flag it so the setup callback releases
+      ws._pinchState.pending = true;
+      return;
+    }
+    releasePinch(ws);
   }, 300);
 }
 

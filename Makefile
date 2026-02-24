@@ -9,20 +9,24 @@ IMAGE            ?= google_apis
 JDK_MAJOR             ?= 17
 CMDLINE_TOOLS_VERSION ?= 11076708
 HEADLESS              ?= 0
+BUN_VERSION           ?= 1.2
 
 ROOT    := $(CURDIR)
 SDK_DIR := $(ROOT)/.android-sdk
 JDK_DIR := $(ROOT)/.jdk
 AVD_DIR := $(ROOT)/.avd
+BUN_DIR := $(ROOT)/.bun
 
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),arm64)
   ABI           := arm64-v8a
   JDK_ARCH      := aarch64
+  BUN_ARCH      := aarch64
   CHROME_BASE   := seleniarm/standalone-chromium:latest
 else
   ABI           := x86_64
   JDK_ARCH      := x64
+  BUN_ARCH      := x64
   CHROME_BASE   := selenium/standalone-chrome:latest
 endif
 
@@ -40,7 +44,7 @@ export JAVA_HOME        := $(JDK_DIR)/Contents/Home
 export ANDROID_HOME     := $(SDK_DIR)
 export ANDROID_SDK_ROOT := $(SDK_DIR)
 export ANDROID_AVD_HOME := $(AVD_DIR)
-export PATH             := $(JAVA_HOME)/bin:$(SDK_DIR)/cmdline-tools/latest/bin:$(SDK_DIR)/platform-tools:$(SDK_DIR)/emulator:$(PATH)
+export PATH             := $(BUN_DIR)/bin:$(JAVA_HOME)/bin:$(SDK_DIR)/cmdline-tools/latest/bin:$(SDK_DIR)/platform-tools:$(SDK_DIR)/emulator:$(PATH)
 
 ifeq ($(HEADLESS),1)
   EMU_FLAGS := -no-window -no-audio -gpu swiftshader_indirect
@@ -48,10 +52,25 @@ else
   EMU_FLAGS := -no-window -no-audio -gpu host
 endif
 
+BUN_OK   := $(BUN_DIR)/.ok
 JDK_OK   := $(JDK_DIR)/.ok
 SDK_OK   := $(SDK_DIR)/.ok
 IMAGE_OK := $(SDK_DIR)/.image-$(API)-$(IMAGE)-$(ABI).ok
 AVD_OK   := $(AVD_DIR)/.avd-$(AVD_NAME).ok
+
+# ── Bun ────────────────────────────────────────────────────
+$(BUN_OK):
+	@echo "▶ Downloading Bun $(BUN_VERSION)…"
+	@mkdir -p "$(BUN_DIR)"
+	@curl -fSL --progress-bar \
+		"https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-$(BUN_ARCH).zip" \
+		-o /tmp/_emu_bun.zip
+	@unzip -oq /tmp/_emu_bun.zip -d /tmp/_emu_bun_unpack
+	@mkdir -p "$(BUN_DIR)/bin"
+	@mv /tmp/_emu_bun_unpack/bun-darwin-$(BUN_ARCH)/bun "$(BUN_DIR)/bin/bun"
+	@chmod +x "$(BUN_DIR)/bin/bun"
+	@rm -rf /tmp/_emu_bun.zip /tmp/_emu_bun_unpack
+	@touch "$@"
 
 # ── JDK ────────────────────────────────────────────────────
 $(JDK_OK):
@@ -100,16 +119,16 @@ $(AVD_OK): $(IMAGE_OK)
 # ── Public targets ─────────────────────────────────────────
 .PHONY: start stop open clean clean-all setup-chrome launch-emulator build-linux launch-linux stop-linux reset-linux
 
-start:
-	@cd "$(ROOT)/web" && npm install --silent
+start: $(BUN_OK)
+	@cd "$(ROOT)/web" && bun install --silent
 	@echo "▶ Starting backend server on port $(WEB_PORT)…"
-	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) NOVNC_PORT=$(NOVNC_PORT) node server.js > "$(ROOT)/.web.log" 2>&1 &
+	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) NOVNC_PORT=$(NOVNC_PORT) bun run server.js > "$(ROOT)/.web.log" 2>&1 &
 	@sleep 1
 	@echo "✔ Backend running at http://localhost:$(WEB_PORT)"
 	@open "$(ROOT)/web/public/index.html"
 
 stop:
-	@-pkill -f "node server.js" 2>/dev/null || echo "(no backend running)"
+	@-pkill -f "bun run server.js" 2>/dev/null || echo "(no backend running)"
 	@"$(ADB)" emu kill 2>/dev/null || echo "(no emulator running)"
 	@docker stop "$(LINUX_CONTAINER)" > /dev/null 2>&1 || true
 	@echo "✔ Stopped."
@@ -185,5 +204,5 @@ clean:
 	@echo "✔ AVDs cleaned."
 
 clean-all:
-	@rm -rf "$(SDK_DIR)" "$(JDK_DIR)" "$(AVD_DIR)" "$(ROOT)/.emulator.log" "$(ROOT)/.web.log"
+	@rm -rf "$(SDK_DIR)" "$(JDK_DIR)" "$(AVD_DIR)" "$(BUN_DIR)" "$(ROOT)/.emulator.log" "$(ROOT)/.web.log"
 	@echo "✔ All cleaned."

@@ -1,61 +1,106 @@
-# Device Dashboard
+# Browserhut
 
-Web-based dashboard for running Android emulator and Linux (Chromium) side by side. Self-contained Makefile — downloads JDK and Android SDK on first run. No Homebrew needed.
+[![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-000?logo=apple&logoColor=white)](https://support.apple.com/macos)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=000)](https://bun.sh)
+[![Docker](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)](https://www.docker.com)
 
-## Features
+> A simple, self-hosted alternative to BrowserStack.
+> Run an Android emulator and a Linux Chromium desktop in your browser — no cloud, no subscriptions, everything on your machine.
 
-- **Android emulator** — streamed live to browser canvas via gRPC, with full touch/keyboard input
-- **Linux desktop** — Chromium in Docker, accessed via noVNC iframe
-- **Scroll** — mouse wheel scrolls vertically on Android; Shift + wheel scrolls horizontally
-- **Pinch zoom** — hold mouse button + scroll wheel to zoom in/out on Android
-- **Keyboard mapping** — Mac shortcuts (Cmd+C/V/X/Z, Cmd+Arrow, Option+Arrow, etc.) translated to Android/Linux equivalents
-- **Clipboard sync** — Cmd+C / Cmd+V syncs clipboard between Mac and Android/Linux
-- **Multi-instance** — open dashboard in multiple browser windows to control Android and Linux simultaneously
-- **Nav buttons** — on-screen Back, Home, Recents for Android
-- **Reset Chrome** — one-click reset of Chrome state on Android
-- **Auto-setup** — first run downloads JDK, Android SDK, system images, and creates AVD automatically
+One `make start` downloads everything and opens a dashboard. Bookmark it and come back anytime.
 
-## Usage
+---
+
+## Quick start
 
 ```bash
-make start   # start backend server + open dashboard (downloads everything on first run)
-make stop    # shut down everything (emulator, Linux container, backend)
-make open    # re-open the dashboard in browser
+make start
 ```
 
-## Custom image
+This will:
+1. Download Bun, JDK 17, and Android SDK (~20 GB on first run)
+2. Start the backend server
+3. Open the dashboard in your browser — **bookmark this page** for easy access later
+
+From the dashboard, click **Start** on Android or Linux (or both).
+
+```bash
+make stop      # shut down everything
+make open      # re-open the dashboard
+```
+
+## What it does
+
+**Android emulator** — screen is streamed to a browser canvas via gRPC. Touch, keyboard, scroll, and pinch-zoom all work through the browser.
+
+**Linux desktop** — runs Chromium in a Docker container, displayed via noVNC. Keyboard input is captured and forwarded.
+
+Both can run simultaneously — open the dashboard in two browser windows and start one device in each.
+
+## Controls
+
+| Input | Action |
+|---|---|
+| Click / drag | Touch |
+| Scroll wheel | Vertical scroll |
+| `Shift` + scroll | Horizontal scroll |
+| Hold mouse button + scroll | Pinch zoom in/out |
+| `Cmd+C` / `Cmd+V` | Clipboard sync with Mac |
+| `Cmd+Arrow`, `Option+Arrow` | Mapped to Home/End, word nav |
+| Side buttons | Back, Home, Recents (Android) |
+
+## Requirements
+
+- **macOS** (Apple Silicon)
+- **Docker**
+- ~20 GB disk on first run (JDK, SDK, system image, AVD)
+
+> **Note:** No manual dependencies — Bun, JDK, and Android SDK are all downloaded automatically by `make start`.
+
+## Configuration
 
 ```bash
 make start API=33 IMAGE=google_apis_playstore
 ```
 
-Each combination gets its own AVD automatically (e.g. `emu-33-google_apis_playstore`).
-
-| Variable | Default | Values |
+| Variable | Default | Description |
 |---|---|---|
-| `API` | `34` | Android API level (30, 33, 34, 35…) |
-| `IMAGE` | `google_apis` | `google_apis`, `google_apis_playstore`, `default` |
-| `HEADLESS` | `0` | `1` = no window, no audio (CI) |
+| `API` | `34` | Android API level |
+| `IMAGE` | `google_apis` | System image (`google_apis`, `google_apis_playstore`, `default`) |
+| `HEADLESS` | `0` | Set to `1` for no-window mode (CI) |
+| `WEB_PORT` | `3000` | Backend server port |
+| `GRPC_PORT` | `8554` | Emulator gRPC port |
+| `NOVNC_PORT` | `7900` | Linux noVNC port |
 
-## Finding available values
+Each API/image combination gets its own AVD (e.g. `emu-33-google_apis_playstore`).
 
-After first `make start`, you can query the SDK directly:
+## Project structure
 
-```bash
-# Available system images (Google APIs):
-.android-sdk/cmdline-tools/latest/bin/sdkmanager --list | grep system-images | grep google
-
-# Available device profiles:
-.android-sdk/cmdline-tools/latest/bin/avdmanager list device -c
+```
+Makefile              # Downloads SDK, manages emulator and Linux container
+Dockerfile.linux      # Chromium + xdotool + xclip on Selenium base image
+web/
+  server.js           # Backend: gRPC bridge, WebSocket, REST API (runs on Bun)
+  public/index.html   # Single-page dashboard (vanilla JS, no build step)
 ```
 
-## How it works
+Everything downloaded at runtime lives in gitignored directories:
 
-Everything is stored locally in the project directory:
+```
+.bun/                 # Bun runtime (auto-downloaded)
+.jdk/                 # Adoptium JDK 17
+.android-sdk/         # Android SDK, emulator, system images
+.avd/                 # AVD data
+```
 
-- `.jdk/` — Adoptium JDK 17
-- `.android-sdk/` — Android SDK (cmdline-tools, platform-tools, emulator, system images)
-- `.avd/` — AVD data
-- `web/` — Node.js backend (gRPC bridge, WebSocket server, static files)
+## Cleanup
 
-`make clean` removes AVDs only (quick re-setup). `make clean-all` removes everything.
+```bash
+make clean            # delete AVDs (keep SDK/JDK)
+make clean-all        # delete everything (.bun, .jdk, .android-sdk, .avd)
+```
+
+## License
+
+[MIT](LICENSE)

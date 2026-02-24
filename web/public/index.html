@@ -89,23 +89,32 @@
   }
   #backend-status.connected { color: #5a8a5e; }
 
-  /* ── Emulator view ────────────────────────────── */
-  #emulator-view {
+  .cards {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* ── Device views (shared) ──────────────────────── */
+  .device-view {
     display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     height: 100%;
   }
-  #emu-status {
+  .device-status {
     padding: 10px 16px;
     font-size: 11px;
     color: #555;
     letter-spacing: 0.5px;
     font-weight: 500;
   }
-  #emu-status.connected { color: #5a8a5e; }
-  #emu-status.error { color: #a05050; }
+  .device-status.connected { color: #5a8a5e; }
+  .device-status.error { color: #a05050; }
+
+  /* ── Emulator view ────────────────────────────── */
   #container {
     display: flex;
     flex-direction: row;
@@ -121,13 +130,13 @@
     display: block;
     box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
   }
-  #nav {
+  .side-nav {
     display: flex;
     flex-direction: column;
     gap: 2px;
     padding: 8px 4px;
   }
-  #nav button {
+  .side-nav button {
     background: transparent;
     color: #888;
     border: none;
@@ -141,20 +150,37 @@
     justify-content: center;
     -webkit-tap-highlight-color: transparent;
   }
-  #nav button svg {
+  .side-nav button svg {
     width: 20px;
     height: 20px;
     fill: currentColor;
     transition: fill 0.15s ease;
   }
-  #nav button:hover {
+  .side-nav button:hover {
     background: rgba(255,255,255,0.06);
     color: #bbb;
   }
-  #nav button:active {
+  .side-nav button:active {
     background: rgba(255,255,255,0.1);
     color: #fff;
     transform: scale(0.92);
+  }
+
+  /* ── Linux view ────────────────────────────────── */
+  #linux-frame-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+  }
+  #linux-frame {
+    border: none;
+    border-radius: 12px;
+    background: #000;
+    width: 80vw;
+    height: 85vh;
+    max-width: 1400px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
   }
 </style>
 </head>
@@ -162,29 +188,48 @@
 
 <!-- Launcher view -->
 <div id="launcher">
-  <h1>Device Dashboard</h1>
-  <div class="card">
-    <div class="card-title">Android Emulator</div>
-    <div id="emu-card-status" class="card-status">Connecting to backend...</div>
-    <button id="start-btn" class="btn" disabled>Start</button>
+  <div class="cards">
+    <div class="card">
+      <div class="card-title">Android</div>
+      <div id="emu-card-status" class="card-status">Connecting to backend...</div>
+      <button id="start-btn" class="btn" disabled>Start</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Linux</div>
+      <div id="linux-card-status" class="card-status">Connecting to backend...</div>
+      <button id="linux-start-btn" class="btn" disabled>Start</button>
+    </div>
   </div>
   <div id="backend-status">Connecting...</div>
 </div>
 
 <!-- Emulator view -->
-<div id="emulator-view">
+<div id="emulator-view" class="device-view">
   <div id="container">
     <canvas id="screen"></canvas>
-    <div id="nav">
+    <div class="side-nav">
       <button data-key="AppSwitch" title="Recents"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
       <button data-key="GoHome" title="Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
       <button data-key="GoBack" title="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
       <span style="flex:1"></span>
-      <button id="stop-btn" title="Stop Emulator"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg></button>
       <button id="reset-chrome" title="Reset Chrome"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+      <button id="stop-btn" title="Stop Emulator"><svg viewBox="0 0 24 24"><path d="M12 3v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M6.81 7.81A7 7 0 1 0 17.19 7.81" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
     </div>
   </div>
-  <div id="emu-status">Streaming...</div>
+  <div id="emu-status" class="device-status">Streaming...</div>
+</div>
+
+<!-- Linux view -->
+<div id="linux-view" class="device-view">
+  <div id="linux-frame-container">
+    <iframe id="linux-frame" src="about:blank"></iframe>
+    <div class="side-nav">
+      <span style="flex:1"></span>
+      <button id="linux-reset-btn" title="Reset Container"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+      <button id="linux-stop-btn" title="Stop Linux"><svg viewBox="0 0 24 24"><path d="M12 3v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M6.81 7.81A7 7 0 1 0 17.19 7.81" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
+    </div>
+  </div>
+  <div id="linux-status" class="device-status">Connected</div>
 </div>
 
 <script>
@@ -198,8 +243,15 @@
   // DOM
   const launcherEl = document.getElementById('launcher');
   const emuViewEl = document.getElementById('emulator-view');
+  const linuxViewEl = document.getElementById('linux-view');
   const startBtn = document.getElementById('start-btn');
   const stopBtn = document.getElementById('stop-btn');
+  const linuxStartBtn = document.getElementById('linux-start-btn');
+  const linuxStopBtn = document.getElementById('linux-stop-btn');
+  const linuxResetBtn = document.getElementById('linux-reset-btn');
+  const linuxFrame = document.getElementById('linux-frame');
+  const linuxStatusEl = document.getElementById('linux-status');
+  const linuxCardStatus = document.getElementById('linux-card-status');
   const backendStatusEl = document.getElementById('backend-status');
   const emuCardStatus = document.getElementById('emu-card-status');
   const emuStatusEl = document.getElementById('emu-status');
@@ -213,19 +265,39 @@
   let fps = 0;
   let backendConnected = false;
   let emulatorState = 'stopped';
+  let linuxState = 'stopped';
+  let novncPort = 7900;
   let statusPollTimer = null;
+  let pendingDevice = null; // 'android' | 'linux' | null — which device the user clicked Start on
 
   // ── View switching ──────────────────────────────────────
 
   function showLauncher() {
     launcherEl.style.display = 'flex';
     emuViewEl.style.display = 'none';
+    linuxViewEl.style.display = 'none';
+    stopLinuxFocusGuard();
     updateLauncherUI();
   }
 
   function showEmulatorView() {
     launcherEl.style.display = 'none';
     emuViewEl.style.display = 'flex';
+    linuxViewEl.style.display = 'none';
+    stopLinuxFocusGuard();
+  }
+
+  function showLinuxView() {
+    launcherEl.style.display = 'none';
+    emuViewEl.style.display = 'none';
+    linuxViewEl.style.display = 'flex';
+    startLinuxFocusGuard();
+    const novncUrl = 'http://localhost:' + novncPort + '/vnc_lite.html?scale=true';
+    linuxStatusEl.textContent = 'Connected';
+    linuxStatusEl.className = 'device-status connected';
+    // Reset iframe to force fresh connection
+    linuxFrame.src = 'about:blank';
+    setTimeout(() => { linuxFrame.src = novncUrl; }, 300);
   }
 
   function updateLauncherUI() {
@@ -233,6 +305,9 @@
       emuCardStatus.textContent = 'Backend not connected';
       emuCardStatus.className = 'card-status error';
       startBtn.disabled = true;
+      linuxCardStatus.textContent = 'Backend not connected';
+      linuxCardStatus.className = 'card-status error';
+      linuxStartBtn.disabled = true;
       backendStatusEl.textContent = 'Disconnected';
       backendStatusEl.className = '';
       return;
@@ -241,6 +316,7 @@
     backendStatusEl.textContent = 'Backend connected';
     backendStatusEl.className = 'connected';
 
+    // Android card
     if (emulatorState === 'stopped') {
       emuCardStatus.textContent = 'Stopped';
       emuCardStatus.className = 'card-status';
@@ -258,6 +334,31 @@
       startBtn.textContent = 'Connect';
       startBtn.className = 'btn';
       startBtn.disabled = false;
+    }
+
+    // Linux card
+    if (linuxState === 'stopped') {
+      linuxCardStatus.textContent = 'Stopped';
+      linuxCardStatus.className = 'card-status';
+      linuxStartBtn.textContent = 'Start';
+      linuxStartBtn.className = 'btn';
+      linuxStartBtn.disabled = false;
+    } else if (linuxState === 'starting') {
+      linuxCardStatus.textContent = 'Starting...';
+      linuxCardStatus.className = 'card-status starting';
+      linuxStartBtn.textContent = 'Starting...';
+      linuxStartBtn.disabled = true;
+    } else if (linuxState === 'stopping') {
+      linuxCardStatus.textContent = 'Stopping...';
+      linuxCardStatus.className = 'card-status starting';
+      linuxStartBtn.textContent = 'Stopping...';
+      linuxStartBtn.disabled = true;
+    } else if (linuxState === 'running') {
+      linuxCardStatus.textContent = 'Running';
+      linuxCardStatus.className = 'card-status running';
+      linuxStartBtn.textContent = 'Connect';
+      linuxStartBtn.className = 'btn';
+      linuxStartBtn.disabled = false;
     }
   }
 
@@ -281,7 +382,9 @@
       .then((r) => r.json())
       .then((data) => {
         backendConnected = true;
+        if (data.novncPort) novncPort = data.novncPort;
         setEmulatorState(data.emulator);
+        setLinuxState(data.linux);
       })
       .catch(() => {
         backendConnected = false;
@@ -292,9 +395,23 @@
   function setEmulatorState(state) {
     emulatorState = state;
     if (emuViewEl.style.display !== 'none' && state === 'stopped') {
-      // Emulator stopped while viewing — return to launcher
       if (ws) { ws.close(); ws = null; }
       showLauncher();
+    }
+    updateLauncherUI();
+  }
+
+  function setLinuxState(state) {
+    const wasStarting = linuxState === 'starting';
+    linuxState = state;
+    if (linuxViewEl.style.display !== 'none' && (state === 'stopped' || state === 'stopping')) {
+      linuxFrame.src = 'about:blank';
+      showLauncher();
+      startPolling();
+    } else if (state === 'running' && wasStarting && pendingDevice === 'linux' && linuxViewEl.style.display === 'none') {
+      pendingDevice = null;
+      showLinuxView();
+      stopPolling();
     }
     updateLauncherUI();
   }
@@ -312,6 +429,8 @@
     if (emulatorState !== 'stopped') return;
 
     startBtn.disabled = true;
+    pendingDevice = 'android';
+    connectWs();
     fetch(API_BASE + '/api/emulator/start', { method: 'POST' })
       .then((r) => r.json())
       .then((data) => {
@@ -333,6 +452,52 @@
         startPolling();
       })
       .catch((err) => console.error('Stop failed:', err));
+  });
+
+  // ── Linux Start / Stop / Reset ─────────────────────────
+
+  linuxStartBtn.addEventListener('click', () => {
+    if (linuxState === 'running') {
+      showLinuxView();
+      stopPolling();
+      return;
+    }
+    if (linuxState !== 'stopped') return;
+
+    linuxStartBtn.disabled = true;
+    pendingDevice = 'linux';
+    connectWs();
+    fetch(API_BASE + '/api/linux/start', { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        setLinuxState(data.linux || 'starting');
+      })
+      .catch((err) => {
+        console.error('Linux start failed:', err);
+        linuxStartBtn.disabled = false;
+      });
+  });
+
+  linuxStopBtn.addEventListener('click', () => {
+    linuxFrame.src = 'about:blank';
+    linuxState = 'stopping';
+    showLauncher();
+    startPolling();
+    fetch(API_BASE + '/api/linux/stop', { method: 'POST' })
+      .then((r) => r.json())
+      .then((data) => {
+        setLinuxState(data.linux || 'stopping');
+      })
+      .catch((err) => console.error('Linux stop failed:', err));
+  });
+
+  linuxResetBtn.addEventListener('click', () => {
+    linuxFrame.src = 'about:blank';
+    linuxStatusEl.textContent = 'Restarting...';
+    linuxStatusEl.className = 'device-status';
+    fetch(API_BASE + '/api/linux/reset', { method: 'POST' })
+      .then((r) => r.json())
+      .catch((err) => console.error('Linux reset failed:', err));
   });
 
   // ── Frame rendering via rAF ─────────────────────────────
@@ -392,26 +557,44 @@
 
     ws.onopen = () => {
       emuStatusEl.textContent = 'Connected';
-      emuStatusEl.className = 'connected';
+      emuStatusEl.className = 'device-status connected';
       wsReconnectDelay = 1000;
     };
 
     ws.onmessage = (evt) => {
       if (typeof evt.data === 'string') {
         const msg = JSON.parse(evt.data);
-        if (msg.type === 'config') {
+        if (msg.type === 'clipboard' || msg.type === 'linux-clipboard') {
+          if (msg.text) {
+            navigator.clipboard.writeText(msg.text).catch(() => {});
+          }
+        } else if (msg.type === 'config') {
           deviceWidth = msg.deviceWidth;
           deviceHeight = msg.deviceHeight;
           setCanvasSize();
         } else if (msg.type === 'status') {
-          if (msg.emulator === 'running' && emuViewEl.style.display === 'none') {
-            // Just transitioned to running — switch view
+          if (msg.emulator === 'running' && pendingDevice === 'android' && emuViewEl.style.display === 'none') {
             showEmulatorView();
             stopPolling();
+            pendingDevice = null;
           } else if (msg.emulator === 'stopped') {
             setEmulatorState('stopped');
           } else {
             emulatorState = msg.emulator;
+            updateLauncherUI();
+          }
+        } else if (msg.type === 'linux-status') {
+          if (msg.novncPort) novncPort = msg.novncPort;
+          if (msg.linux === 'running' && pendingDevice === 'linux' && linuxViewEl.style.display === 'none') {
+            showLinuxView();
+            stopPolling();
+            pendingDevice = null;
+          } else if (msg.linux === 'stopped') {
+            setLinuxState('stopped');
+          } else if (msg.linux === 'running' && linuxViewEl.style.display !== 'none') {
+            showLinuxView();
+          } else {
+            linuxState = msg.linux;
             updateLauncherUI();
           }
         }
@@ -424,9 +607,13 @@
 
     ws.onclose = () => {
       emuStatusEl.textContent = 'Disconnected';
-      emuStatusEl.className = 'error';
+      emuStatusEl.className = 'device-status error';
       // If we're in the emulator view, try to reconnect
       if (emuViewEl.style.display !== 'none' && emulatorState === 'running') {
+        setTimeout(connectWs, wsReconnectDelay);
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, 10000);
+      } else if (linuxViewEl.style.display !== 'none') {
+        // Linux view is open — reconnect WS for status updates but stay on Linux
         setTimeout(connectWs, wsReconnectDelay);
         wsReconnectDelay = Math.min(wsReconnectDelay * 2, 10000);
       } else {
@@ -455,16 +642,18 @@
   // ── Touch / Mouse input ─────────────────────────────────
 
   let mouseDown = false;
+  let pinching = false;
 
   canvas.addEventListener('mousedown', (e) => {
     e.preventDefault();
     mouseDown = true;
+    pinching = false;
     const { x, y } = mapCoords(e);
     send({ type: 'touch', x, y, pressure: 1024, id: 0 });
   });
 
   canvas.addEventListener('mousemove', (e) => {
-    if (!mouseDown) return;
+    if (!mouseDown || pinching) return;
     e.preventDefault();
     const { x, y } = mapCoords(e);
     send({ type: 'touch', x, y, pressure: 1024, id: 0 });
@@ -472,15 +661,24 @@
 
   canvas.addEventListener('mouseup', (e) => {
     e.preventDefault();
+    if (pinching) {
+      pinching = false;
+      mouseDown = false;
+      return;
+    }
     mouseDown = false;
     const { x, y } = mapCoords(e);
     send({ type: 'touch', x, y, pressure: 0, id: 0 });
   });
 
   canvas.addEventListener('mouseleave', () => {
-    if (mouseDown) {
+    if (mouseDown && !pinching) {
       mouseDown = false;
       send({ type: 'touch', x: 0, y: 0, pressure: 0, id: 0 });
+    }
+    if (pinching) {
+      pinching = false;
+      mouseDown = false;
     }
   });
 
@@ -526,47 +724,253 @@
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  // ── Scroll / Pinch-zoom via mouse wheel ────────────────
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { x, y } = mapCoords(e);
+
+    if (mouseDown && !pinching) {
+      send({ type: 'touch', x, y, pressure: 0, id: 0 });
+      pinching = true;
+    }
+
+    if (mouseDown) {
+      send({ type: 'pinch', x, y, delta: e.deltaY > 0 ? 1 : -1 });
+      return;
+    }
+
+    let dx = e.deltaX;
+    let dy = e.deltaY;
+    if (e.shiftKey) {
+      dx = dy;
+      dy = 0;
+    }
+
+    send({ type: 'scroll', x, y, dx, dy });
+  }, { passive: false });
+
   // ── Keyboard input ──────────────────────────────────────
 
   const FORWARD_CMD = new Set(['a','c','v','x','z']);
+  const SPECIAL_KEYS = new Set([
+    'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+    'Backspace', 'Delete', 'Enter', 'Tab', 'Escape',
+    'Home', 'End', 'PageUp', 'PageDown',
+    'F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12',
+  ]);
+  const MODIFIER_KEYS = new Set(['Meta', 'Alt', 'Shift', 'Control', 'CapsLock']);
+
+  // Steal keyboard focus back from iframe when Linux view is active.
+  // The iframe handles mouse/display only; all keyboard goes through our handler.
+  let linuxFocusInterval = null;
+  function startLinuxFocusGuard() {
+    if (linuxFocusInterval) return;
+    linuxFocusInterval = setInterval(() => {
+      if (document.activeElement === linuxFrame || !document.hasFocus()) {
+        window.focus();
+      }
+    }, 50);
+  }
+  function stopLinuxFocusGuard() {
+    if (linuxFocusInterval) {
+      clearInterval(linuxFocusInterval);
+      linuxFocusInterval = null;
+    }
+  }
 
   document.addEventListener('keydown', (e) => {
-    if (emuViewEl.style.display === 'none') return; // Only in emulator view
-    if (e.repeat) return;
+    // ── Linux view: capture ALL keyboard, map Mac → Linux ──
+    if (linuxViewEl.style.display !== 'none') {
+      const k = e.key;
+      const kl = k.toLowerCase();
+      const cmd = e.metaKey;
+      const opt = e.altKey;
+      const shift = e.shiftKey;
 
-    if ((e.metaKey || e.ctrlKey) && FORWARD_CMD.has(e.key.toLowerCase())) {
+      if (MODIFIER_KEYS.has(k)) return;
       e.preventDefault();
-      if (e.key.toLowerCase() === 'v') {
+
+      // Cmd+V → paste from Mac clipboard
+      if (cmd && kl === 'v') {
         navigator.clipboard.readText().then((text) => {
-          if (text) send({ type: 'paste', text });
-          else send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false });
+          if (text) send({ type: 'linux-paste', text });
+          else send({ type: 'linux-key', key: 'v', ctrl: true, shift: false, alt: false });
         }).catch(() => {
-          send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false });
+          send({ type: 'linux-key', key: 'v', ctrl: true, shift: false, alt: false });
         });
         return;
       }
-      send({
-        type: 'key', eventType: 'keydown', key: e.key,
-        ctrl: true, shift: e.shiftKey,
+
+      // Cmd+C → Ctrl+C, then sync Linux clipboard → Mac
+      if (cmd && kl === 'c') {
+        send({ type: 'linux-key', key: 'c', ctrl: true, shift: false, alt: false });
+        setTimeout(() => send({ type: 'linux-clipboard-read' }), 200);
+        return;
+      }
+
+      // Cmd+<letter> → Ctrl+<letter> (select all, cut, undo, etc.)
+      if (cmd && kl.length === 1 && kl >= 'a' && kl <= 'z') {
+        send({ type: 'linux-key', key: kl, ctrl: true, shift, alt: false });
+        return;
+      }
+
+      // Cmd+Left/Right → Home/End
+      if (cmd && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+        send({ type: 'linux-key', key: k === 'ArrowLeft' ? 'Home' : 'End', ctrl: false, shift, alt: false });
+        return;
+      }
+
+      // Cmd+Up/Down → Ctrl+Home/End (beginning/end of document)
+      if (cmd && (k === 'ArrowUp' || k === 'ArrowDown')) {
+        send({ type: 'linux-key', key: k === 'ArrowUp' ? 'Home' : 'End', ctrl: true, shift, alt: false });
+        return;
+      }
+
+      // Option+Left/Right → Ctrl+Left/Right (word navigation/selection)
+      if (opt && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+        send({ type: 'linux-key', key: k, ctrl: true, shift, alt: false });
+        return;
+      }
+
+      // Option+Up/Down → move by paragraph (approximate with 5x arrow)
+      if (opt && (k === 'ArrowUp' || k === 'ArrowDown')) {
+        for (let i = 0; i < 5; i++) send({ type: 'linux-key', key: k, ctrl: false, shift, alt: false });
+        return;
+      }
+
+      // Option+Backspace → Ctrl+Backspace (delete word)
+      if (opt && k === 'Backspace') {
+        send({ type: 'linux-key', key: 'BackSpace', ctrl: true, shift: false, alt: false });
+        return;
+      }
+
+      // Option+Delete → Ctrl+Delete (delete word forward)
+      if (opt && k === 'Delete') {
+        send({ type: 'linux-key', key: 'Delete', ctrl: true, shift: false, alt: false });
+        return;
+      }
+
+      // Cmd+Backspace → select to line start + delete
+      if (cmd && k === 'Backspace') {
+        send({ type: 'linux-key', key: 'Home', ctrl: false, shift: true, alt: false });
+        setTimeout(() => send({ type: 'linux-key', key: 'BackSpace', ctrl: false, shift: false, alt: false }), 50);
+        return;
+      }
+
+      // Special keys (arrows, backspace, enter, etc.)
+      if (SPECIAL_KEYS.has(k)) {
+        send({ type: 'linux-key', key: k, ctrl: false, shift, alt: opt });
+        return;
+      }
+
+      // Regular printable character
+      if (k.length === 1) {
+        send({ type: 'linux-type', text: k });
+        return;
+      }
+      return;
+    }
+
+    // ── Android emulator view ──
+    if (emuViewEl.style.display === 'none') return;
+    if (e.repeat) return;
+
+    const k = e.key;
+    const kl = k.toLowerCase();
+    const cmd = e.metaKey;
+    const opt = e.altKey;
+    const shift = e.shiftKey;
+
+    if (MODIFIER_KEYS.has(k)) return;
+
+    // Cmd+V → paste from Mac clipboard
+    if (cmd && kl === 'v') {
+      e.preventDefault();
+      navigator.clipboard.readText().then((text) => {
+        if (text) send({ type: 'paste', text });
+        else send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false, alt: false });
+      }).catch(() => {
+        send({ type: 'key', eventType: 'keydown', key: 'v', ctrl: true, shift: false, alt: false });
       });
       return;
     }
 
-    if (e.metaKey || e.ctrlKey) return;
+    // Cmd+C → Ctrl+C, then sync Android clipboard → Mac
+    if (cmd && kl === 'c') {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: 'c', ctrl: true, shift: false, alt: false });
+      setTimeout(() => send({ type: 'clipboard-read' }), 200);
+      return;
+    }
+
+    // Cmd+<letter> → Ctrl+<letter> (select all, cut, undo, etc.)
+    if (cmd && kl.length === 1 && kl >= 'a' && kl <= 'z') {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: kl, ctrl: true, shift, alt: false });
+      return;
+    }
+
+    // Cmd+Left/Right → Home/End (line start/end)
+    if (cmd && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: k === 'ArrowLeft' ? 'Home' : 'End', ctrl: false, shift, alt: false });
+      return;
+    }
+
+    // Cmd+Up/Down → Ctrl+Home/End (document start/end)
+    if (cmd && (k === 'ArrowUp' || k === 'ArrowDown')) {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: k === 'ArrowUp' ? 'Home' : 'End', ctrl: true, shift, alt: false });
+      return;
+    }
+
+    // Option+Left/Right → Ctrl+Left/Right (word navigation)
+    if (opt && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: k, ctrl: true, shift, alt: false });
+      return;
+    }
+
+    // Option+Backspace → Ctrl+Backspace (delete word)
+    if (opt && k === 'Backspace') {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: 'Backspace', ctrl: true, shift: false, alt: false });
+      return;
+    }
+
+    // Option+Delete → Ctrl+Delete (delete word forward)
+    if (opt && k === 'Delete') {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: 'Delete', ctrl: true, shift: false, alt: false });
+      return;
+    }
+
+    // Cmd+Backspace → select to line start + delete
+    if (cmd && k === 'Backspace') {
+      e.preventDefault();
+      send({ type: 'key', eventType: 'keydown', key: 'Home', ctrl: false, shift: true, alt: false });
+      setTimeout(() => send({ type: 'key', eventType: 'keydown', key: 'Backspace', ctrl: false, shift: false, alt: false }), 50);
+      return;
+    }
+
+    // Block other cmd/ctrl shortcuts
+    if (cmd || e.ctrlKey) return;
+
     e.preventDefault();
-    send({ type: 'key', eventType: 'keydown', key: e.key });
+    // Pass shift/alt modifiers for selection (Shift+Arrow) etc.
+    send({ type: 'key', eventType: 'keydown', key: k, ctrl: false, shift, alt: opt });
   });
 
   document.addEventListener('keyup', (e) => {
     if (emuViewEl.style.display === 'none') return;
     if (e.metaKey || e.ctrlKey) return;
     e.preventDefault();
-    send({ type: 'key', eventType: 'keyup', key: e.key });
   });
 
   // ── Nav buttons ─────────────────────────────────────────
 
-  document.querySelectorAll('#nav button[data-key]').forEach((btn) => {
+  document.querySelectorAll('.side-nav button[data-key]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const key = btn.getAttribute('data-key');
       send({ type: 'key', eventType: 'keypress', key });

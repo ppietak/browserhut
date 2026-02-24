@@ -2,6 +2,8 @@ SHELL := /bin/bash
 
 GRPC_PORT       ?= 8554
 WEB_PORT        ?= 3000
+NOVNC_PORT      ?= 7900
+LINUX_CONTAINER ?= webtest-linux-chrome
 API             ?= 34
 IMAGE            ?= google_apis
 JDK_MAJOR             ?= 17
@@ -15,12 +17,17 @@ AVD_DIR := $(ROOT)/.avd
 
 UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_M),arm64)
-  ABI      := arm64-v8a
-  JDK_ARCH := aarch64
+  ABI           := arm64-v8a
+  JDK_ARCH      := aarch64
+  CHROME_BASE   := seleniarm/standalone-chromium:latest
 else
-  ABI      := x86_64
-  JDK_ARCH := x64
+  ABI           := x86_64
+  JDK_ARCH      := x64
+  CHROME_BASE   := selenium/standalone-chrome:latest
 endif
+
+CHROME_IMAGE    := webtest-linux-chrome:latest
+LINUX_IMAGE_OK  := $(ROOT)/.linux-image.ok
 
 AVD_NAME     := emu-$(API)-$(IMAGE)
 SYSTEM_IMAGE := system-images;android-$(API);$(IMAGE);$(ABI)
@@ -91,12 +98,12 @@ $(AVD_OK): $(IMAGE_OK)
 	@touch "$@"
 
 # ── Public targets ─────────────────────────────────────────
-.PHONY: start stop open clean clean-all setup-chrome launch-emulator
+.PHONY: start stop open clean clean-all setup-chrome launch-emulator build-linux launch-linux stop-linux reset-linux
 
 start:
 	@cd "$(ROOT)/web" && npm install --silent
 	@echo "▶ Starting backend server on port $(WEB_PORT)…"
-	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) node server.js > "$(ROOT)/.web.log" 2>&1 &
+	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) NOVNC_PORT=$(NOVNC_PORT) node server.js > "$(ROOT)/.web.log" 2>&1 &
 	@sleep 1
 	@echo "✔ Backend running at http://localhost:$(WEB_PORT)"
 	@open "$(ROOT)/web/public/index.html"
@@ -104,6 +111,7 @@ start:
 stop:
 	@-pkill -f "node server.js" 2>/dev/null || echo "(no backend running)"
 	@"$(ADB)" emu kill 2>/dev/null || echo "(no emulator running)"
+	@docker stop "$(LINUX_CONTAINER)" > /dev/null 2>&1 || true
 	@echo "✔ Stopped."
 
 open:
@@ -129,6 +137,48 @@ setup-chrome:
 	@sleep 3
 	@"$(ADB)" shell input keyevent 4
 	@echo "✔ Chrome launched."
+
+$(LINUX_IMAGE_OK):
+	@echo "▶ Building Linux Chromium image…"
+	@docker build -q -t "$(CHROME_IMAGE)" --build-arg BASE_IMAGE="$(CHROME_BASE)" -f "$(ROOT)/Dockerfile.linux" "$(ROOT)"
+	@touch "$@"
+
+launch-linux: $(LINUX_IMAGE_OK)
+	@if docker ps --format '{{.Names}}' | grep -q "^$(LINUX_CONTAINER)$$"; then \
+		echo "⚠ Linux container already running"; exit 0; \
+	fi
+	@docker rm -f "$(LINUX_CONTAINER)" > /dev/null 2>&1 || true
+	@echo "▶ Starting Linux Chromium container…"
+	@docker run -d --rm \
+		--name "$(LINUX_CONTAINER)" \
+		--shm-size=2g \
+		-p $(NOVNC_PORT):7900 \
+		-e SE_VNC_NO_PASSWORD=1 \
+		-e SE_SCREEN_WIDTH=1280 \
+		-e SE_SCREEN_HEIGHT=900 \
+		-e SE_NODE_MAX_SESSIONS=1 \
+		"$(CHROME_IMAGE)" > /dev/null
+	@echo "  Waiting for VNC…"
+	@for i in $$(seq 1 30); do \
+		if curl -sf http://localhost:$(NOVNC_PORT) > /dev/null 2>&1; then break; fi; \
+		sleep 1; \
+	done
+	@sleep 3
+	@echo "  Launching Chromium…"
+	@docker exec -d "$(LINUX_CONTAINER)" \
+		chromium --no-first-run --disable-fre --no-default-browser-check \
+		--disable-notifications --start-maximized about:blank
+	@echo "✔ Linux Chromium ready at http://localhost:$(NOVNC_PORT)"
+
+stop-linux:
+	@docker rm -f "$(LINUX_CONTAINER)" > /dev/null 2>&1 || echo "(no container running)"
+	@echo "✔ Linux container stopped."
+
+reset-linux:
+	@echo "▶ Restarting Linux container…"
+	@docker stop "$(LINUX_CONTAINER)" > /dev/null 2>&1 || true
+	@sleep 1
+	@$(MAKE) launch-linux
 
 clean:
 	@rm -rf "$(AVD_DIR)" "$(SDK_DIR)"/.image-*.ok

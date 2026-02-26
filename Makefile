@@ -119,7 +119,7 @@ $(AVD_OK): $(IMAGE_OK)
 # ── Public targets ─────────────────────────────────────────
 .PHONY: start stop open clean clean-all setup-chrome launch-emulator build-linux launch-linux stop-linux reset-linux
 
-start: $(BUN_OK)
+start: $(BUN_OK) $(AVD_OK) $(LINUX_IMAGE_OK)
 	@cd "$(ROOT)/web" && bun install --silent
 	@echo "▶ Starting backend server on port $(WEB_PORT)…"
 	@cd "$(ROOT)/web" && GRPC_PORT=$(GRPC_PORT) WEB_PORT=$(WEB_PORT) NOVNC_PORT=$(NOVNC_PORT) bun run server.js > "$(ROOT)/.web.log" 2>&1 &

@@ -461,6 +461,11 @@ const httpServer = http.createServer((req, res) => {
     return sendJson(res, 200, { linux: 'starting' });
   }
 
+  // Redirect favicon.ico to favicon.svg
+  if (req.url === '/favicon.ico') {
+    req.url = '/favicon.svg';
+  }
+
   // Clean URL routes → HTML files
   if (req.url === '/android') {
     req.url = '/android.html';

@@ -1,9 +1,7 @@
 # Browserhut
 
-[![macOS](https://img.shields.io/badge/macOS-Apple_Silicon-000?logo=apple&logoColor=white)](https://support.apple.com/macos)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1?logo=bun&logoColor=000)](https://bun.sh)
 [![Docker](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)](https://www.docker.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > A simple, self-hosted alternative to BrowserStack.
 > Run an Android emulator and a Linux Chromium desktop in your browser — no cloud, no subscriptions, everything on your machine.
@@ -52,7 +50,7 @@ Both can run simultaneously — open the dashboard in two browser windows and st
 
 ## Requirements
 
-- **macOS** (Apple Silicon)
+- **macOS** (tested on Apple Silicon)
 - **Docker**
 - ~20 GB disk on first run (JDK, SDK, system image, AVD)
 

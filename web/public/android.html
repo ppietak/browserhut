@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Android - Browserhut</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/styles.css">
+<style>html, body { height: 100%; overflow: hidden; touch-action: none; }</style>
+</head>
+<body>
+
+<div id="container">
+  <canvas id="screen"></canvas>
+  <div class="side-nav">
+    <button data-key="AppSwitch" title="Recents"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    <button data-key="GoHome" title="Home"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+    <button data-key="GoBack" title="Back"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></button>
+    <span style="flex:1"></span>
+    <button id="reset-chrome" title="Reset Chrome"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+    <button id="stop-btn" title="Stop Emulator"><svg viewBox="0 0 24 24"><path d="M12 3v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M6.81 7.81A7 7 0 1 0 17.19 7.81" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
+  </div>
+</div>
+<div id="emu-status" class="device-status">Connecting...</div>
+
+<script src="/android.js"></script>
+</body>
+</html>

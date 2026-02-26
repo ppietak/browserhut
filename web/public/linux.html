@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux - Browserhut</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/styles.css">
+<style>html, body { height: 100%; overflow: hidden; touch-action: none; }</style>
+</head>
+<body>
+
+<div id="linux-frame-container">
+  <iframe id="linux-frame" src="about:blank"></iframe>
+  <div class="side-nav">
+    <span style="flex:1"></span>
+    <button id="linux-reset-btn" title="Reset Container"><svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.96 7.96 0 0 0 12 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18a6 6 0 1 1 0-12c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+    <button id="linux-stop-btn" title="Stop Linux"><svg viewBox="0 0 24 24"><path d="M12 3v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M6.81 7.81A7 7 0 1 0 17.19 7.81" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
+  </div>
+</div>
+<div id="linux-status" class="device-status">Connecting...</div>
+
+<script src="/linux.js"></script>
+</body>
+</html>

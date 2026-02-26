@@ -21,6 +21,7 @@ const MIME_TYPES = {
   '.css': 'text/css',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
 };
 
 // ── Emulator state ────────────────────────────────────────
@@ -91,28 +92,38 @@ function handleKey(eventType, key, ctrl, shift, alt) {
 
   if (keycode !== undefined) {
     adbCmd(`input keyevent ${keycode}`);
-  } else if (key.length === 1) {
+  } else if (key.length === 1 && /^[^\x00-\x1f]$/.test(key)) {
     const escaped = key === "'" ? "'\\''" : "'" + key + "'";
     adbCmd(`input text ${escaped}`);
   }
 }
 
-// ── gRPC client setup (deferred) ─────────────────────────
+// ── gRPC client setup (deferred until SDK is available) ──
 
-const packageDef = protoLoader.loadSync(PROTO_PATH, {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true,
-});
-const proto = grpc.loadPackageDefinition(packageDef);
-const EmulatorController = proto.android.emulation.control.EmulatorController;
-
+let EmulatorController = null;
 let streamClient = null;
 let inputClient = null;
 
+function loadProto() {
+  if (EmulatorController) return true;
+  if (!fs.existsSync(PROTO_PATH)) {
+    console.log('Proto file not found (SDK not installed yet), skipping gRPC setup');
+    return false;
+  }
+  const packageDef = protoLoader.loadSync(PROTO_PATH, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true,
+  });
+  const proto = grpc.loadPackageDefinition(packageDef);
+  EmulatorController = proto.android.emulation.control.EmulatorController;
+  return true;
+}
+
 function connectGrpc() {
+  if (!loadProto()) return;
   console.log('Connecting gRPC clients...');
   streamClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
   inputClient = new EmulatorController(`localhost:${GRPC_PORT}`, grpc.credentials.createInsecure());
@@ -352,23 +363,25 @@ const JS_TO_XDOTOOL = {
 };
 
 function linuxKey(key, ctrl, shift, alt) {
-  const xkey = JS_TO_XDOTOOL[key] || key;
+  const xkey = JS_TO_XDOTOOL[key];
+  // Only allow mapped keys or single alphanumeric/symbol characters
+  if (!xkey && (key.length !== 1 || !/^[a-zA-Z0-9 `~!@#$%^&*()\-_=+\[\]{}\\|;:'",.<>/?]$/.test(key))) return;
   const mods = [];
   if (ctrl) mods.push('ctrl');
   if (shift) mods.push('shift');
   if (alt) mods.push('alt');
-  mods.push(xkey);
+  mods.push(xkey || key);
   linuxCmd(`xdotool key ${mods.join('+')}`);
 }
 
 function linuxType(text) {
-  const escaped = text.replace(/\\/g, '\\\\').replace(/'/g, "'\\''");
-  linuxCmd(`xdotool type --delay 0 -- '${escaped}'`);
+  const b64 = Buffer.from(text).toString('base64');
+  linuxCmd(`echo -n ${b64} | base64 -d | xargs -0 xdotool type --delay 0 --`);
 }
 
 function linuxPaste(text) {
-  const escaped = text.replace(/'/g, "'\\''");
-  linuxCmd(`echo -n '${escaped}' | xclip -selection clipboard && xdotool key ctrl+v`);
+  const b64 = Buffer.from(text).toString('base64');
+  linuxCmd(`echo -n ${b64} | base64 -d | xclip -selection clipboard && xdotool key ctrl+v`);
 }
 
 function readLinuxClipboard(callback) {
@@ -446,6 +459,13 @@ const httpServer = http.createServer((req, res) => {
     }
     resetLinux();
     return sendJson(res, 200, { linux: 'starting' });
+  }
+
+  // Clean URL routes → HTML files
+  if (req.url === '/android') {
+    req.url = '/android.html';
+  } else if (req.url === '/linux') {
+    req.url = '/linux.html';
   }
 
   // Static files

@@ -6,20 +6,24 @@
 > A simple, self-hosted alternative to BrowserStack.
 > Run an Android emulator and a Linux Chromium desktop in your browser — no cloud, no subscriptions, everything on your machine.
 
-One `make start` downloads everything and opens a dashboard. Bookmark it and come back anytime.
-
----
+<p align="center">
+  <img src="web/public/screenshot-dashboard.png" height="240" alt="Dashboard">
+  &nbsp;&nbsp;
+  <img src="web/public/screenshot-android.png" height="240" alt="Android emulator">
+</p>
 
 ## Quick start
 
 ```bash
+git clone git@github.com:ppietak/browserhut.git
+cd browserhut
 make start
 ```
 
 This will:
 1. Download Bun, JDK 17, and Android SDK (~20 GB on first run)
 2. Start the backend server
-3. Open the dashboard in your browser — **bookmark this page** for easy access later
+3. Open the dashboard in your browser
 
 From the dashboard, click **Start** on Android or Linux (or both).
 
@@ -34,7 +38,7 @@ make open      # re-open the dashboard
 
 **Linux desktop** — runs Chromium in a Docker container, displayed via noVNC. Keyboard input is captured and forwarded.
 
-Both can run simultaneously — open the dashboard in two browser windows and start one device in each.
+Both can run simultaneously.
 
 ## Controls
 
@@ -80,7 +84,14 @@ Makefile              # Downloads SDK, manages emulator and Linux container
 Dockerfile.linux      # Chromium + xdotool + xclip on Selenium base image
 web/
   server.js           # Backend: gRPC bridge, WebSocket, REST API (runs on Bun)
-  public/index.html   # Single-page dashboard (vanilla JS, no build step)
+  public/
+    index.html        # Dashboard
+    android.html      # Android emulator view
+    linux.html        # Linux desktop view
+    styles.css        # Shared styles
+    dashboard.js      # Dashboard logic (REST polling)
+    android.js        # Emulator logic (WebSocket, canvas, input)
+    linux.js          # Linux logic (WebSocket, noVNC, keyboard)
 ```
 
 Everything downloaded at runtime lives in gitignored directories:
